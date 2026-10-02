@@ -17,11 +17,12 @@ use MoodlePluginCI\Tests\Fake\Bridge\DummyMoodle;
 use MoodlePluginCI\Tests\Fake\Process\DummyExecute;
 use MoodlePluginCI\Tests\MoodleTestCase;
 use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 class MustacheCommandTest extends MoodleTestCase
 {
-    protected function executeCommand($pluginDir = null, $moodleDir = null)
+    protected function executeCommand($pluginDir = null, $moodleDir = null, $command = null)
     {
         if ($pluginDir === null) {
             $pluginDir = $this->pluginDir;
@@ -30,7 +31,10 @@ class MustacheCommandTest extends MoodleTestCase
             $moodleDir = $this->moodleDir;
         }
 
-        $command          = new MustacheCommand();
+        if ($command === null) {
+            $command = new MustacheCommand();
+        }
+
         $command->moodle  = new DummyMoodle($moodleDir);
         $command->execute = new DummyExecute();
 
@@ -46,19 +50,32 @@ class MustacheCommandTest extends MoodleTestCase
         return $commandTester;
     }
 
-    public function testExecute()
+    public function testExecute(): void
     {
-        $commandTester = $this->executeCommand();
+        // Assert that the mobile app template is skipped.
+        $command = $this->getMockBuilder(MustacheCommand::class)
+            ->onlyMethods(['outputSkip'])
+            ->getMock();
+
+        $command->expects($this->once())
+            ->method('outputSkip')
+            ->with(
+                $this->isInstanceOf(OutputInterface::class),
+                $this->stringContains('/templates/mobileapp/item.mustache'),
+            )
+            ->willReturn(0);
+
+        $commandTester = $this->executeCommand(null, null, $command);
         $this->assertSame(0, $commandTester->getStatusCode());
     }
 
-    public function testExecuteNoPlugin()
+    public function testExecuteNoPlugin(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->executeCommand($this->moodleDir . '/no/plugin');
     }
 
-    public function testExecuteNoMoodle()
+    public function testExecuteNoMoodle(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->executeCommand($this->moodleDir . '/no/moodle');

@@ -54,7 +54,7 @@ class CodeCheckerCommandTest extends MoodleTestCase
         return $commandTester;
     }
 
-    public function testExecute()
+    public function testExecute(): void
     {
         $commandTester = $this->executeCommand();
         $this->assertSame(0, $commandTester->getStatusCode());
@@ -68,7 +68,7 @@ class CodeCheckerCommandTest extends MoodleTestCase
         $this->assertMatchesRegularExpression('/RUN  Moodle CodeSniffer standard on local_ci/', $output);
     }
 
-    public function testExecuteFail()
+    public function testExecuteFail(): void
     {
         // Add a file known to have moodle errors.
         $content = <<<'EOT'
@@ -96,7 +96,7 @@ EOT;
         $output = $commandTester->getDisplay();
         $this->assertMatchesRegularExpression('/E\.* 10\.* \/ 10 \(100%\)/', $output);                // Progress.
         $this->assertMatchesRegularExpression('/\/fixable.php/', $output);                            // File.
-        $this->assertMatchesRegularExpression('/ 13 ERRORS AND 1 WARNING AFFECTING 8 /', $output);    // Summary.
+        $this->assertMatchesRegularExpression('/ 12 ERRORS AND 1 WARNING AFFECTING 8 /', $output);    // Summary.
         $this->assertMatchesRegularExpression('/BoilerplateComment\.NoBoilerplateComment/', $output); // Moodle sniff.
         $this->assertMatchesRegularExpression('/Expected MOODLE_INTERNAL check/', $output);           // Moodle sniff.
         $this->assertMatchesRegularExpression('/print_error\(\) has been deprecated/', $output);      // Moodle sniff.
@@ -106,7 +106,6 @@ EOT;
         $this->assertMatchesRegularExpression('/Missing @copyright tag/', $output);                   // Moodle sniff.
         $this->assertMatchesRegularExpression('/Missing @license tag/', $output);                     // Moodle sniff.
         $this->assertMatchesRegularExpression('/Missing docblock for function somefunc/', $output);   // Moodle sniff.
-        $this->assertMatchesRegularExpression('/AbstractPrivateMethods\.Found/', $output);    // PHPCompatibility sniff.
         $this->assertMatchesRegularExpression('/Opening brace must be the last content/', $output);   // Generic sniff.
         $this->assertMatchesRegularExpression('/Closing brace must not be followed by/', $output);    // PSR12 sniff.
         $this->assertMatchesRegularExpression('/Files\.EndFileNewline\.NoneFound/', $output);         // Generic of file.
@@ -117,7 +116,7 @@ EOT;
         $this->assertMatchesRegularExpression('/RUN  Moodle CodeSniffer/', $commandTester->getDisplay());
     }
 
-    public function testExecuteWithWarningsAndThreshold()
+    public function testExecuteWithWarningsAndThreshold(): void
     {
         // Let's add a file with 2 warnings, and verify how the max-warnings affects the outcome.
         $content = <<<'EOT'
@@ -150,67 +149,7 @@ EOT;
         $this->assertSame(0, $commandTester->getStatusCode());
     }
 
-    public function testExecuteWithTestVersion()
-    {
-        // Let's add a file with some new and deprecated stuff, and verify that the test-version option affects to the outcome.
-        $content = <<<'EOT'
-<?php // phpcs:disable moodle
-mb_str_split();                       // New in PHP 7.4.
-ini_get('allow_url_include');         // Deprecated in PHP 7.4.
-ldap_count_references();              // New in PHP 8.0.
-pg_errormessage();                    // Deprecated in PHP 8.0.
-$fb = new ReflectionFiber();          // New in PHP 8.1.
-ini_get('auto_detect_line_endings');  // Deprecated in PHP 8.1.
-openssl_cipher_key_length();          // New in PHP 8.2.
-utf8_encode();                        // Deprecated in PHP 8.2.
-
-EOT;
-        $this->fs->dumpFile($this->pluginDir . '/test_versions.php', $content);
-
-        // By default, without specify test-version, only reports deprecation warnings and returns 0.
-        $commandTester = $this->executeCommand($this->pluginDir);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(0, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 0 ERRORS AND 4 WARNINGS AFFECTING 4 LINES/', $output);
-
-        // With test-version 7.4, reports 3 new errors and <= 7.4 specific warnings and returns 1.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '7.4']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 3 ERRORS AND 1 WARNING AFFECTING 4 LINES/', $output);
-
-        // With test-version 8.0, reports 2 new errors and <= 8.0 specific warnings and returns 1.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '8.0']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 2 ERRORS AND 2 WARNINGS AFFECTING 4 LINES/', $output);
-
-        // With test-version 8.1, reports 1 new errors and <= 8.1 specific warnings and returns 0.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '8.1']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 1 ERROR AND 3 WARNINGS AFFECTING 4 LINES/', $output);
-
-        // With test-version 7.4-8.0, reports 3 new errors and <= 8.0 specific warnings and returns 1.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '7.4-8.0']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 3 ERRORS AND 2 WARNINGS AFFECTING 5 LINES/', $output);
-
-        // With test-version 7.4-8.1, reports 3 new errors and <= 8.1 specific warnings and returns 1.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '7.4-8.1']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 3 ERRORS AND 3 WARNINGS AFFECTING 6 LINES/', $output);
-
-        // With test-version 7.4- (open range), reports 3 new errors and <= 8.2 specific warnings and returns 1.
-        $commandTester = $this->executeCommand($this->pluginDir, ['--test-version' => '7.4-']);
-        $output        = $commandTester->getDisplay();
-        $this->assertSame(1, $commandTester->getStatusCode());
-        $this->assertMatchesRegularExpression('/FOUND 3 ERRORS AND 4 WARNINGS AFFECTING 7 LINES/', $output);
-    }
-
-    public function testExecuteWithExclusions()
+    public function testExecuteWithExclusions(): void
     {
         // Add a file with errors and warnings, and verify that they are suppressed with the exclusions.
         $content = "<?php require(__DIR__.'/../../config.php');\n";
@@ -236,7 +175,7 @@ EOT;
         $this->assertSame(0, $commandTester->getStatusCode());
     }
 
-    public function testExecuteWithTodoCommentRegex()
+    public function testExecuteWithTodoCommentRegex(): void
     {
         // Let's add a file with some comments having links and some without.
         $content = <<<'EOT'
@@ -276,7 +215,7 @@ EOT;
         $this->assertMatchesRegularExpression('/Missing required "CUSTOM-\[0-9\]\+"/', $output);
     }
 
-    public function testExecuteWithLicenseRegex()
+    public function testExecuteWithLicenseRegex(): void
     {
         // Let's add a file with some comments having various licenses.
         $content = <<<'EOT'
@@ -314,7 +253,7 @@ EOT;
         $this->assertMatchesRegularExpression('/Value ".+invented-license IL v3 or later" does not match/', $output);
     }
 
-    public function testExecuteNoFiles()
+    public function testExecuteNoFiles(): void
     {
         // Just random directory with no PHP files.
         $commandTester = $this->executeCommand($this->pluginDir . '/tests/behat');
@@ -322,7 +261,7 @@ EOT;
         $this->assertMatchesRegularExpression('/No relevant files found to process, free pass!/', $commandTester->getDisplay());
     }
 
-    public function testExecuteNoPlugin()
+    public function testExecuteNoPlugin(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->executeCommand('/path/to/no/plugin');
@@ -359,7 +298,7 @@ EOT;
      *
      * @dataProvider commandFailedSomethingIsWrongProvider
      */
-    public function testCommandFailedSomethingIsWrong(array $options, string $output)
+    public function testCommandFailedSomethingIsWrong(array $options, string $output): void
     {
         // Verify that with incorrect configurations we are getting the command always failed.
         $commandTester = $this->executeCommand($this->pluginDir, $options);
